@@ -1,0 +1,11 @@
+*.csv
+*.zip
+data/
+landing/
+.kaggle/
+access_token
+*.env
+*.log
+__pycache__/
+*.pyc
+.DS_Store
