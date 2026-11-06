@@ -33,15 +33,23 @@ spark.sparkContext.setLogLevel("WARN")
 
 
 # ---------------------------------------------------------------- readers
+def blanks_to_null(df):
+    """Spark 2.0's CSV reader returns empty fields as "" instead of null.
+    Convert them, so null checks and comparisons behave correctly."""
+    return df.select([F.when(F.col(c) == "", None).otherwise(F.col(c)).alias(c)
+                      for c in df.columns])
+
+
 def read_csv(name):
     """Read one raw table. Every column stays a string, so ZIP prefixes
     keep their leading zeros (design doc: never infer schema)."""
-    return (spark.read
-            .option("header", "true")
-            .option("inferSchema", "false")
-            .option("quote", '"')
-            .option("escape", '"')
-            .csv("%s/%s/load_date=%s/*.csv" % (RAW, name, LOAD_DATE)))
+    df = (spark.read
+          .option("header", "true")
+          .option("inferSchema", "false")
+          .option("quote", '"')
+          .option("escape", '"')
+          .csv("%s/%s/load_date=%s/*.csv" % (RAW, name, LOAD_DATE)))
+    return blanks_to_null(df)
 
 
 def read_reviews():
@@ -59,8 +67,11 @@ def read_reviews():
     width = len(header)
 
     def clean(r):
-        return [c.decode("utf-8").replace("\r", " ").replace("\n", " ")
-                for c in r]
+        out = []
+        for c in r:
+            v = c.decode("utf-8").replace("\r", " ").replace("\n", " ")
+            out.append(v if v.strip() != "" else None)
+        return out
 
     data = (rows.filter(lambda r: r != header and len(r) == width)
                 .map(clean))
