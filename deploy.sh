@@ -15,7 +15,7 @@ echo "[deploy] commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'not com
 
 # Pack the repo (minus .git and junk) and unpack it on the sandbox.
 # COPYFILE_DISABLE stops macOS adding hidden ._ files to the archive.
-COPYFILE_DISABLE=1 tar --exclude=.git --exclude='*.csv' --exclude='.DS_Store' -czf - . \
+COPYFILE_DISABLE=1 tar --no-xattrs --exclude=.git --exclude='*.csv' --exclude='.DS_Store' -czf - . \
   | ssh "$SANDBOX_SSH" "rm -rf '$REMOTE_APP_DIR' && mkdir -p '$REMOTE_APP_DIR' && tar -xzf - -C '$REMOTE_APP_DIR' && chmod +x '$REMOTE_APP_DIR'/ingest/*.sh '$REMOTE_APP_DIR'/*.sh"
 
 # Publish code to HDFS, where Oozie workflows will read it.

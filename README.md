@@ -28,8 +28,11 @@ transfer_to_sandbox.sh -> /opt/olist/landing/<date>/
 | `ingest/extract_kaggle.sh` | Mac: download from the Kaggle API, write manifest |
 | `ingest/transfer_to_sandbox.sh` | Mac: copy a landing folder to the sandbox |
 | `ingest/ingest_olist.sh` | Sandbox: validate, load to HDFS raw, write `_SUCCESS`, audit |
+| `spark/common.py` | Shared readers (empty field -> null, multi-line reviews), keys, Unknown rows |
 | `spark/profile_olist.py` | Data profiling / grain checks for one load date |
-| `hive/` | Hive DDL and validation queries (later) |
+| `spark/build_dims.py` | Builds the 7 dimension tables as Parquet in `/data/olist/curated` |
+| `run_spark.sh` | Sandbox: submit a Spark job to YARN with sandbox-sized memory |
+| `hive/ddl_dims.sql` | Hive external tables over the dimension Parquet files |
 | `oozie/` | Oozie workflow and coordinator (later) |
 | `deploy.sh` | Mac: ship the repo to the sandbox and HDFS |
 | `run_pipeline.sh` | Mac: one command - extract, transfer, ingest |
