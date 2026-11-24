@@ -1,0 +1,102 @@
+<!--
+  =====================================================================
+  OLIST DW - BATCH WORKFLOW (one load date)
+
+  check raw load -> build dims -> build facts -> Hive DDL dims
+     -> Hive DDL facts -> business queries -> mark batch complete
+
+  Every step runs only if the previous one succeeded; any failure goes to
+  the "fail" node and stops the run. The Spark jobs exit non-zero when
+  their quality gates fail, so bad data never reaches the next step.
+
+  Steps run through Oozie SSH actions on the sandbox, calling the same
+  scripts used by hand (run_spark.sh / run_hive.sh). All values come from
+  job.properties, which run_oozie.sh generates from conf/olist.conf.
+  =====================================================================
+-->
+<workflow-app name="olist-dw-batch-${loadDate}" xmlns="uri:oozie:workflow:0.5">
+
+    <start to="check-raw-load"/>
+
+    <!-- Only start if ingestion finished: its _SUCCESS flag must exist. -->
+    <decision name="check-raw-load">
+        <switch>
+            <case to="build-dims">${fs:exists(concat(concat(nameNode, rawFlagsDir), concat(concat('/load_date=', loadDate), '/_SUCCESS')))}</case>
+            <default to="no-raw-load"/>
+        </switch>
+    </decision>
+
+    <action name="build-dims">
+        <ssh xmlns="uri:oozie:ssh-action:0.2">
+            <host>${sshHost}</host>
+            <command>${appHome}/run_spark.sh</command>
+            <args>spark/build_dims.py</args>
+            <args>${loadDate}</args>
+        </ssh>
+        <ok to="build-facts"/>
+        <error to="fail"/>
+    </action>
+
+    <action name="build-facts">
+        <ssh xmlns="uri:oozie:ssh-action:0.2">
+            <host>${sshHost}</host>
+            <command>${appHome}/run_spark.sh</command>
+            <args>spark/build_facts.py</args>
+            <args>${loadDate}</args>
+        </ssh>
+        <ok to="hive-ddl-dims"/>
+        <error to="fail"/>
+    </action>
+
+    <action name="hive-ddl-dims">
+        <ssh xmlns="uri:oozie:ssh-action:0.2">
+            <host>${sshHost}</host>
+            <command>${appHome}/run_hive.sh</command>
+            <args>hive/ddl_dims.sql</args>
+        </ssh>
+        <ok to="hive-ddl-facts"/>
+        <error to="fail"/>
+    </action>
+
+    <!-- Re-registers the purchase_year partitions (MSCK REPAIR). -->
+    <action name="hive-ddl-facts">
+        <ssh xmlns="uri:oozie:ssh-action:0.2">
+            <host>${sshHost}</host>
+            <command>${appHome}/run_hive.sh</command>
+            <args>hive/ddl_facts.sql</args>
+        </ssh>
+        <ok to="business-queries"/>
+        <error to="fail"/>
+    </action>
+
+    <action name="business-queries">
+        <ssh xmlns="uri:oozie:ssh-action:0.2">
+            <host>${sshHost}</host>
+            <command>${appHome}/run_hive.sh</command>
+            <args>hive/queries.sql</args>
+        </ssh>
+        <ok to="mark-batch-complete"/>
+        <error to="fail"/>
+    </action>
+
+    <!-- Same convention as ingestion: a _SUCCESS flag marks a finished batch. -->
+    <action name="mark-batch-complete">
+        <fs>
+            <delete path="${nameNode}${batchFlagsDir}/load_date=${loadDate}"/>
+            <mkdir path="${nameNode}${batchFlagsDir}/load_date=${loadDate}"/>
+            <touchz path="${nameNode}${batchFlagsDir}/load_date=${loadDate}/_SUCCESS"/>
+        </fs>
+        <ok to="end"/>
+        <error to="fail"/>
+    </action>
+
+    <kill name="no-raw-load">
+        <message>No completed raw load for load_date=${loadDate}: ${rawFlagsDir}/load_date=${loadDate}/_SUCCESS not found. Run the ingestion first.</message>
+    </kill>
+
+    <kill name="fail">
+        <message>Step [${wf:lastErrorNode()}] failed: ${wf:errorMessage(wf:lastErrorNode())}. See the step's log in ${appHome}/../logs</message>
+    </kill>
+
+    <end name="end"/>
+</workflow-app>

@@ -20,6 +20,8 @@ Run on the sandbox:   ./run_spark.sh spark/build_facts.py 2026-11-03
 """
 from __future__ import print_function
 
+import sys
+
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
@@ -286,6 +288,18 @@ avg = fact_fulfillment.filter("is_delivered = 1").agg(
     F.round(F.avg("total_lead_days"), 1).alias("d")).first()
 line("average days from purchase to delivery", avg["d"])
 
+# Quality gate: every fact must keep its grain and reconcile to the raw
+# totals. A non-zero exit fails the Oozie step and stops the pipeline.
+failed = ["%s: %s duplicate grain keys" % (t, v)
+          for t, label, v in results if label == "duplicate grain keys" and v]
+for name, raw_v, fact_v in [("price", raw_items["p"], fact_items["p"]),
+                            ("freight_value", raw_items["f"], fact_items["f"]),
+                            ("payment_value", raw_pay["v"], fact_pay["v"])]:
+    if raw_v != fact_v:
+        failed.append("%s does not reconcile (raw %s, fact %s)" % (name, raw_v, fact_v))
 print("")
-print("Fact build finished.")
 spark.stop()
+if failed:
+    print("QUALITY GATE FAILED - " + "; ".join(failed))
+    sys.exit(1)
+print("Quality gate passed. Fact build finished.")

@@ -1,0 +1,49 @@
+<!--
+  =====================================================================
+  OLIST DW - DAILY COORDINATOR
+
+  Creates one workflow run per day between ${coordStart} and ${coordEnd}.
+  Each run is TIME- and DATA-triggered: it waits until that day's raw load
+  has its _SUCCESS flag (written by ingest_olist.sh), then starts the
+  batch workflow with loadDate = that day.
+  =====================================================================
+-->
+<coordinator-app name="olist-dw-daily" frequency="${coord:days(1)}"
+                 start="${coordStart}" end="${coordEnd}" timezone="UTC"
+                 xmlns="uri:oozie:coordinator:0.4">
+
+    <controls>
+        <timeout>${coordTimeoutMinutes}</timeout>   <!-- give up waiting for a day's data after this -->
+        <concurrency>1</concurrency>                 <!-- one batch at a time on the sandbox -->
+        <execution>FIFO</execution>                  <!-- oldest day first -->
+    </controls>
+
+    <datasets>
+        <dataset name="raw-load" frequency="${coord:days(1)}"
+                 initial-instance="${coordStart}" timezone="UTC">
+            <uri-template>${nameNode}${rawFlagsDir}/load_date=${YEAR}-${MONTH}-${DAY}</uri-template>
+            <done-flag>_SUCCESS</done-flag>
+        </dataset>
+    </datasets>
+
+    <input-events>
+        <data-in name="todays-raw-load" dataset="raw-load">
+            <instance>${coord:current(0)}</instance>
+        </data-in>
+    </input-events>
+
+    <action>
+        <workflow>
+            <app-path>${appDir}</app-path>
+            <configuration>
+                <property><name>loadDate</name>
+                          <value>${coord:formatTime(coord:nominalTime(), 'yyyy-MM-dd')}</value></property>
+                <property><name>nameNode</name>      <value>${nameNode}</value></property>
+                <property><name>sshHost</name>       <value>${sshHost}</value></property>
+                <property><name>appHome</name>       <value>${appHome}</value></property>
+                <property><name>rawFlagsDir</name>   <value>${rawFlagsDir}</value></property>
+                <property><name>batchFlagsDir</name> <value>${batchFlagsDir}</value></property>
+            </configuration>
+        </workflow>
+    </action>
+</coordinator-app>

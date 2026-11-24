@@ -1,16 +1,16 @@
 -- =====================================================================
 -- Hive external tables over the fact Parquet files written by
--- spark/build_facts.py. Data stays in /data/olist/curated; DROP of an
+-- spark/build_facts.py. Data stays in the curated zone (HDFS_CURATED); DROP of an
 -- EXTERNAL table never deletes the files, so this script is re-runnable.
 --
 -- fact_order_item and fact_payment are partitioned by purchase_year
--- (folders purchase_year=2016/2017/2018). Hive must be told which
+-- (one folder per year, e.g. purchase_year=2017). Hive must be told which
 -- partition folders exist: MSCK REPAIR TABLE scans the location and
 -- registers them. Re-run it after every rebuild.
 --
--- Run:  beeline -u jdbc:hive2://localhost:10000 -n hive -f hive/ddl_facts.sql
+-- Run:  ./run_hive.sh hive/ddl_facts.sql   (paths and database come from conf/olist.conf)
 -- =====================================================================
-USE olist_dw;
+USE ${hivevar:DB};
 
 -- Transaction fact. Grain: one row per item on an order (order_id + order_item_id).
 DROP TABLE IF EXISTS fact_order_item;
@@ -32,7 +32,7 @@ CREATE EXTERNAL TABLE fact_order_item (
 )
 PARTITIONED BY (purchase_year INT)
 STORED AS PARQUET
-LOCATION '/data/olist/curated/fact_order_item';
+LOCATION '${hivevar:CURATED}/fact_order_item';
 MSCK REPAIR TABLE fact_order_item;
 
 -- Accumulating snapshot. Grain: one row per order, one date key per milestone.
@@ -59,7 +59,7 @@ CREATE EXTERNAL TABLE fact_order_fulfillment (
   order_value         DECIMAL(10,2)
 )
 STORED AS PARQUET
-LOCATION '/data/olist/curated/fact_order_fulfillment';
+LOCATION '${hivevar:CURATED}/fact_order_fulfillment';
 
 -- Transaction fact. Grain: one row per payment on an order (order_id + payment_sequential).
 DROP TABLE IF EXISTS fact_payment;
@@ -74,7 +74,7 @@ CREATE EXTERNAL TABLE fact_payment (
 )
 PARTITIONED BY (purchase_year INT)
 STORED AS PARQUET
-LOCATION '/data/olist/curated/fact_payment';
+LOCATION '${hivevar:CURATED}/fact_payment';
 MSCK REPAIR TABLE fact_payment;
 
 -- Transaction fact. Grain: one row per order (its latest review).
@@ -91,7 +91,7 @@ CREATE EXTERNAL TABLE fact_review (
   has_title                INT
 )
 STORED AS PARQUET
-LOCATION '/data/olist/curated/fact_review';
+LOCATION '${hivevar:CURATED}/fact_review';
 
 SHOW TABLES;
 SHOW PARTITIONS fact_order_item;

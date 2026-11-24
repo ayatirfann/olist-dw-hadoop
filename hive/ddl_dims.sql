@@ -1,12 +1,13 @@
 -- =====================================================================
 -- Hive external tables over the dimension Parquet files written by
 -- spark/build_dims.py. Hive stores only the definitions; the data stays in
--- /data/olist/curated. Re-runnable: DROP of an EXTERNAL table never deletes
+-- the curated zone (HDFS_CURATED). Re-runnable: DROP of an EXTERNAL table never deletes
 -- the files.
 --
--- Run:  beeline -u jdbc:hive2://localhost:10000 -n hive -f hive/ddl_dims.sql
+-- Run:  ./run_hive.sh hive/ddl_dims.sql   (paths and database come from conf/olist.conf)
 -- =====================================================================
-USE olist_dw;
+CREATE DATABASE IF NOT EXISTS ${hivevar:DB};
+USE ${hivevar:DB};
 
 DROP TABLE IF EXISTS dim_date;
 CREATE EXTERNAL TABLE dim_date (
@@ -25,7 +26,7 @@ CREATE EXTERNAL TABLE dim_date (
   holiday_name  STRING
 )
 STORED AS PARQUET
-LOCATION '/data/olist/curated/dim_date';
+LOCATION '${hivevar:CURATED}/dim_date';
 
 DROP TABLE IF EXISTS dim_geography;
 CREATE EXTERNAL TABLE dim_geography (
@@ -38,7 +39,7 @@ CREATE EXTERNAL TABLE dim_geography (
   longitude   DOUBLE
 )
 STORED AS PARQUET
-LOCATION '/data/olist/curated/dim_geography';
+LOCATION '${hivevar:CURATED}/dim_geography';
 
 DROP TABLE IF EXISTS dim_customer;
 CREATE EXTERNAL TABLE dim_customer (
@@ -55,7 +56,7 @@ CREATE EXTERNAL TABLE dim_customer (
   location_change_suspect  BOOLEAN
 )
 STORED AS PARQUET
-LOCATION '/data/olist/curated/dim_customer';
+LOCATION '${hivevar:CURATED}/dim_customer';
 
 DROP TABLE IF EXISTS dim_seller;
 CREATE EXTERNAL TABLE dim_seller (
@@ -67,7 +68,7 @@ CREATE EXTERNAL TABLE dim_seller (
   region      STRING
 )
 STORED AS PARQUET
-LOCATION '/data/olist/curated/dim_seller';
+LOCATION '${hivevar:CURATED}/dim_seller';
 
 DROP TABLE IF EXISTS dim_product;
 CREATE EXTERNAL TABLE dim_product (
@@ -86,7 +87,7 @@ CREATE EXTERNAL TABLE dim_product (
   weight_band         STRING
 )
 STORED AS PARQUET
-LOCATION '/data/olist/curated/dim_product';
+LOCATION '${hivevar:CURATED}/dim_product';
 
 DROP TABLE IF EXISTS dim_payment_type;
 CREATE EXTERNAL TABLE dim_payment_type (
@@ -96,7 +97,7 @@ CREATE EXTERNAL TABLE dim_payment_type (
   is_card           BOOLEAN
 )
 STORED AS PARQUET
-LOCATION '/data/olist/curated/dim_payment_type';
+LOCATION '${hivevar:CURATED}/dim_payment_type';
 
 DROP TABLE IF EXISTS dim_order_status;
 CREATE EXTERNAL TABLE dim_order_status (
@@ -106,6 +107,6 @@ CREATE EXTERNAL TABLE dim_order_status (
   is_successful     BOOLEAN
 )
 STORED AS PARQUET
-LOCATION '/data/olist/curated/dim_order_status';
+LOCATION '${hivevar:CURATED}/dim_order_status';
 
 SHOW TABLES;

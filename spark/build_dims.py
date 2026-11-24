@@ -20,6 +20,7 @@ Run on the sandbox:   ./run_spark.sh spark/build_dims.py 2026-11-03
 """
 from __future__ import print_function
 
+import sys
 from datetime import date, timedelta
 
 from pyspark.sql import functions as F
@@ -369,6 +370,12 @@ for name, rows, dups in results:
         line(name, rows)
     else:
         line("%s  (duplicate keys: %s)" % (name, dups), rows)
+# Quality gate: a scheduled pipeline must stop here, not carry bad
+# dimensions into the facts. A non-zero exit fails the Oozie step.
+failed = [name for name, rows, dups in results if dups]
 print("")
-print("Dimension build finished.")
 spark.stop()
+if failed:
+    print("QUALITY GATE FAILED - duplicate surrogate keys in: %s" % ", ".join(failed))
+    sys.exit(1)
+print("Quality gate passed. Dimension build finished.")

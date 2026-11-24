@@ -14,6 +14,7 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$APP_DIR/conf/olist.conf"
 export SPARK_MAJOR_VERSION=2
+export OLIST_HDFS_BASE="$HDFS_BASE"   # Spark jobs read their HDFS paths from the conf
 export LC_ALL=en_US.UTF-8
 
 JOB="$1"; shift
