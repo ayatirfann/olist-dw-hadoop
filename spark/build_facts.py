@@ -227,7 +227,7 @@ fact_payment = save(fp, "fact_payment", ["order_id", "payment_sequential"],
 
 # ============================================================ fact_review
 # Grain rule: one row per order - its most recent review (some orders were
-# reviewed more than once; profiling found 547 such orders).
+# reviewed more than once).
 reviews = read_reviews(spark, LOAD_DATE).select(
     "review_id", "order_id",
     F.col("review_score").cast("int").alias("review_score"),
@@ -261,7 +261,7 @@ fact_items = fact_order_item.agg(F.sum("price").alias("p"),
 raw_pay = payments.agg(F.sum("payment_value").alias("v")).first()
 fact_pay = fact_payment.agg(F.sum("payment_value").alias("v")).first()
 
-section("FACT TABLES WRITTEN TO /data/olist/curated")
+section("FACT TABLES WRITTEN TO %s" % CURATED)
 current = None
 for table, label, value in results:
     if table != current:

@@ -5,7 +5,7 @@ Step 4 - Build the Kimball dimension tables from one raw load.
 Reads  : /data/olist/raw/<table>/load_date=<date>/        (CSV)
 Writes : /data/olist/curated/dim_<name>/                   (Parquet, overwrite)
 
-  dim_date          calendar 2016-2018, smart key YYYYMMDD, BR holidays
+  dim_date          calendar covering every date in the load, smart key YYYYMMDD, BR holidays
   dim_geography     one row per ZIP prefix (deduplicated geolocation)
   dim_customer      one person per customer_unique_id, SCD Type 2 on location
   dim_seller        one row per seller (Type 1)
@@ -27,7 +27,7 @@ from pyspark.sql.types import (StructType, StructField, IntegerType,
                                StringType, DateType, BooleanType)
 from pyspark.sql.window import Window
 
-from common import (load_date_arg, get_spark, read_csv, region_df,
+from common import (CURATED, load_date_arg, get_spark, read_csv, read_reviews, region_df,
                     with_surrogate_key, add_unknown_row, write_parquet,
                     section, line)
 
@@ -96,13 +96,36 @@ MONTHS = ["January", "February", "March", "April", "May", "June", "July",
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
         "Saturday", "Sunday"]
 
+def calendar_years():
+    """First and last year of any date in this load (order milestones,
+    shipping limits, reviews), so the calendar always covers the data."""
+    orders = read_csv(spark, "orders", LOAD_DATE)
+    items = read_csv(spark, "order_items", LOAD_DATE)
+    reviews = read_reviews(spark, LOAD_DATE)
+    sources = [(orders, c) for c in ("order_purchase_timestamp", "order_approved_at",
+                                      "order_delivered_carrier_date",
+                                      "order_delivered_customer_date",
+                                      "order_estimated_delivery_date")]
+    sources += [(items, "shipping_limit_date")]
+    sources += [(reviews, c) for c in ("review_creation_date", "review_answer_timestamp")]
+    years = None
+    for df, c in sources:
+        y = df.select(F.year(F.col(c).cast("timestamp")).alias("y"))
+        years = y if years is None else years.union(y)
+    r = years.agg(F.min("y").alias("lo"), F.max("y").alias("hi")).first()
+    return r["lo"], r["hi"]
+
+
+FIRST_YEAR, LAST_YEAR = calendar_years()
+print("Calendar years found in the data: %s - %s" % (FIRST_YEAR, LAST_YEAR))
+
 holidays = {}
-for y in (2016, 2017, 2018):
+for y in range(FIRST_YEAR, LAST_YEAR + 1):
     holidays.update(brazil_holidays(y))
 
 date_rows = []
-d = date(2016, 1, 1)
-while d <= date(2018, 12, 31):
+d = date(FIRST_YEAR, 1, 1)
+while d <= date(LAST_YEAR, 12, 31):
     date_rows.append((
         d.year * 10000 + d.month * 100 + d.day,     # date_key (smart key)
         d,                                          # full_date
@@ -141,6 +164,7 @@ dim_date = add_unknown_row(spark, dim_date, {
     "day_name": "Unknown / not yet occurred",
     "is_weekend": False, "is_holiday": False})
 save(dim_date, "dim_date", lambda df: [
+    ("calendar", "%s-01-01 to %s-12-31" % (FIRST_YEAR, LAST_YEAR)),
     ("holidays flagged", df.filter("is_holiday").count())])
 
 # ============================================================ dim_geography
@@ -339,7 +363,7 @@ dim_order_status = add_unknown_row(spark, dim_order_status, {
 save(dim_order_status, "dim_order_status")
 
 # ================================================================== report
-section("DIMENSIONS WRITTEN TO /data/olist/curated (incl. -1 Unknown row)")
+section("DIMENSIONS WRITTEN TO %s (incl. -1 Unknown row)" % CURATED)
 for name, rows, dups in results:
     if dups is None:
         line(name, rows)
